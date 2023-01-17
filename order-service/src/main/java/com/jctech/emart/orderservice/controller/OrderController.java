@@ -20,6 +20,7 @@ import com.jctech.emart.orderservice.view.OrderRequest;
 import com.jctech.emart.orderservice.view.OrderResponse;
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 
@@ -32,8 +33,9 @@ public class OrderController {
 	
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@CircuitBreaker(name="inventory", fallbackMethod="fallbackMethod")
-	@TimeLimiter(name="inventory")
+    @CircuitBreaker(name = "inventory", fallbackMethod = "fallbackMethod")
+    @TimeLimiter(name = "inventory")
+    @Retry(name = "inventory")
 	public CompletableFuture<OrderResponse> placeOrder(@RequestBody OrderRequest req) {
 		return CompletableFuture.supplyAsync(() -> orderService.placeOrderVerified(req));
 	} 
@@ -58,10 +60,14 @@ public class OrderController {
 		return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);  
 	}
 	
-	public CompletableFuture<ResponseEntity<String>> failbackMethod(OrderRequest req, RuntimeException runtimeException) {
-		return CompletableFuture.supplyAsync(() -> 
-		    new ResponseEntity<String>("Oops! Something went wrong, please put order after some time"
-				                            ,HttpStatus.INTERNAL_SERVER_ERROR)); 
-	}
+	public CompletableFuture<String> fallbackMethod(OrderRequest orderRequest, RuntimeException runtimeException) {
+        return CompletableFuture.supplyAsync(() -> "Oops! Something went wrong, please order after some time! HttpStatus: " + HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+	
+//	public CompletableFuture<ResponseEntity<String>> failbackMethod() {
+//		return CompletableFuture.supplyAsync(() -> 
+//		    new ResponseEntity<>("Oops! Something went wrong, please put order after some time"
+//				                            ,HttpStatus.INTERNAL_SERVER_ERROR)); 
+//	}
 
 }

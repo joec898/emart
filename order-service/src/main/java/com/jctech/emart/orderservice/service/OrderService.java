@@ -4,9 +4,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import com.jctech.emart.orderservice.event.OrderPlacedEvent;
 import com.jctech.emart.orderservice.exception.ObjectNotFoundException;
 import com.jctech.emart.orderservice.exception.UnsatisfiedRequestException;
 import com.jctech.emart.orderservice.model.Order;
@@ -17,6 +19,9 @@ import com.jctech.emart.orderservice.view.OrderLineItemView;
 import com.jctech.emart.orderservice.view.OrderRequest;
 import com.jctech.emart.orderservice.view.OrderResponse;
 
+import brave.Span;
+import brave.Tracer;
+import brave.Tracer.SpanInScope;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -24,8 +29,9 @@ import lombok.RequiredArgsConstructor;
 public class OrderService {
 
 	private final OrderRepository orderRepo;
-
 	private final WebClient.Builder webClientBuilder;
+	private final Tracer tracer;
+	private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
 	
 	public List<OrderResponse> getOrders(){
 		List<Order> orders = orderRepo.findAll();
@@ -50,24 +56,40 @@ public class OrderService {
 		String inventoryServiceUrl = "http://localhost:8083/api/inventory";
 	    inventoryServiceUrl = "http://inventory-service/api/inventory";
 	    
-		InventoryResponse[] inventoryResponseArr = 
-				webClientBuilder.build().get()
-					.uri(inventoryServiceUrl,
-						uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build())
-					.retrieve()
-					.bodyToMono(InventoryResponse[].class)
-					.block();
-		
-		boolean allProductsInStock =
-				Arrays.stream(inventoryResponseArr).allMatch(InventoryResponse::isInStock);
-		
-		if(allProductsInStock) {
-			orderRepo.save(order);
-			return mapToOrderResponse(order);
-		} else {
-			throw new UnsatisfiedRequestException("Product is not in stock, try again later please");
-		}
-		
+	    // tracer is used here to start a new trace from orderService
+	    // when inventoryService.isInStock() is called in a different thread of orderService.placeOrder
+	    // This create a new span from order to inventoryService, avoiding broken link in tracing among threads
+	    // note: webClientBuilder.build().get() is in new thread
+	    Span inventoryServiceLookup = tracer.nextSpan().name("InventoryServiceLookup");
+	    
+	    //try(Tracer.SpanInScope isLookup = tracer.withSpanI(inventoryServiceLookup.start())){
+	    try(SpanInScope isLookup = tracer.withSpanInScope(inventoryServiceLookup.start())){
+	    InventoryResponse[] inventoryResponseArr =   
+					webClientBuilder.build().get()
+						.uri(inventoryServiceUrl,
+							uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build())
+						.retrieve()
+						.bodyToMono(InventoryResponse[].class)
+						.block();
+			
+			boolean allProductsInStock =
+					Arrays.stream(inventoryResponseArr).allMatch(InventoryResponse::isInStock);
+			
+			if(allProductsInStock) {
+				orderRepo.save(order);
+				
+				this.kafkaTemplate.send("notificationTopic", new OrderPlacedEvent(order.getOrderNumber()));
+				
+				return mapToOrderResponse(order);
+			} else {
+				throw new UnsatisfiedRequestException("Product is not in stock, try again later please");
+			}
+			
+	    } finally {
+	    	inventoryServiceLookup.flush();
+	    	//inventoryServiceLookup.end();
+	    }
+	    
 	}
 	
 	private Order requestToOrder(OrderRequest req) {
