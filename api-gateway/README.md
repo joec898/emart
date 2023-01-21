@@ -73,6 +73,29 @@ docker run -d -p 9411:9411 openzipkin/zipkin
 spring.zipkin.base-url=http://localhost:9411
 spring.sleuth.sampler.probability= 1.0
 
+### Keycloak in Docker and host name mapping in hosts file
+Need to add this command to docker-compose file to import existing configurations 
+of current Keycloak. It will save configuration data as realms/realm-export.json.
+The data will be loaded in new keycloak deployment. The Client Secret in new Keycload needs to be regenerated.
+
+```
+command: [ "start-dev", "--import-realm" ]
+```
+
+When using Keycloak in docker, the url used in generate token (in postman):
+http://localhost:9090/realms/emart-microservices-realm/protocol/openid-connect/token 
+needs to be http://keycloak:9090/...
+
+This can be mapped in .hosts file in C:\Windows\System32\drivers\etc folder
+add a line like: 127.0.0.1       keycloak:
+
+```
+#	127.0.0.1       localhost
+#	::1             localhost
+127.0.0.1       keycloak
+```
+
+
 
 
 
