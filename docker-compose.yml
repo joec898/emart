@@ -110,7 +110,7 @@ services:
 
   ## Eureka Server
   discovery-server:
-    image: emart-discoveryapi:latest
+    image: emart-discovery-api:latest
     container_name: discovery-server
     ports:
       - "8761:8761"
@@ -120,7 +120,7 @@ services:
       - zipkin
 
   api-gateway:
-    image: emart-apigateway:latest
+    image: emart-api-gateway:latest
     container_name: api-gateway
     ports:
       - "8181:8080"
@@ -137,7 +137,7 @@ services:
   ## Product-Service Docker Compose Config
   product-service:
     container_name: product-service
-    image: emart-productapi:latest
+    image: emart-product-api:latest
     environment:
       - SPRING_PROFILES_ACTIVE=docker
     depends_on:
@@ -148,7 +148,7 @@ services:
   ## Order-Service Docker Compose Config
   order-service:
     container_name: order-service
-    image: emart-orderapi:latest
+    image: emart-order-api:latest
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-order:5431/order-service
@@ -162,7 +162,7 @@ services:
   ## Inventory-Service Docker Compose Config
   inventory-service:
     container_name: inventory-service
-    image: emart-inventoryapi:latest
+    image: emart-inventory-api:latest
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-inventory:5432/inventory-service
@@ -174,7 +174,7 @@ services:
   ## Notification-Service Docker Compose Config
   notification-service:
     container_name: notification-service
-    image: emart-notificationapi:latest
+    image: emart-notification-api:latest
     environment:
       - SPRING_PROFILES_ACTIVE=docker
     depends_on:
